@@ -1,0 +1,53 @@
+training Self-HPO with a Budget-RSI-initialised policy (3 seeds x 4 cycles) ...
+   seed 0: final harness [k=3 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+   seed 1: final harness [k=3 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+   seed 2: final harness [k=2 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+
+==============================================================================
+RESULT - held-out bugs fixed (hidden tests pass), 95% bootstrap CI over bugs
+==============================================================================
+method                           fixed   95% CI           gain vs naive   95% CI of gain    
+Naive (first-order)              14.2%   [ 9.8, 19.3]
+Budget RSI                       44.0%   [30.7, 58.1]      +29.8 pts   [+17.7, +41.6]  *
+SO-RSI                           26.5%   [15.6, 38.4]      +12.3 pts   [ +3.0, +21.9]  *
+Budget RSI + SO-RSI              45.8%   [31.4, 60.2]      +31.6 pts   [+19.1, +44.7]  *
+Self-HPO (from scratch)          38.1%   [25.7, 50.4]      +23.9 pts   [+14.4, +33.9]  *
+Self-HPO + Budget RSI init       39.8%   [28.7, 51.0]      +25.7 pts   [+17.5, +34.0]  *
+
+ * = the 95% CI of the paired gain over naive excludes zero.
+(Self-HPO rows average 3 independent training seeds; the others are deterministic given the seeds.)
+saved outputs/part4_comparison.png
+
+==============================================================================
+THE CLAIM, WITH ITS LIMITS  (course lab 09.07)
+==============================================================================
+THREE OBJECTS (lab 09.01)
+  task model       : the debugging agent (CI -> patch -> CI loop, patch scorer, budget 40 runs)
+  research skill   : the harness (k patches/round, extra tests, localisation, SO-RSI on, accept rule)
+  improver         : Self-HPO (H-step rewrites the harness, P-step rewrites the patch policy)
+  What recursed    : in Self-HPO the SAME policy that debugs also analyses its failures to
+                     propose the next harness; each cycle inherits the previous harness and policy.
+
+WHAT WAS TESTED
+  Do Budget RSI, SO-RSI and Self-HPO each help a debugging agent fix held-out bugs under an
+  identical test-execution budget?  Evidence: the table above (paired, bootstrap over bugs).
+
+WHAT THE EVIDENCE SUPPORTS (read the CIs, not just the means)
+  - Methods marked * beat the naive agent on these held-out bugs at the same budget.
+  - Self-HPO's gain is mostly the H-step discovering that SO-RSI diagnostics + strict
+    acceptance should be switched on; the policy-gradient step adds little on top, and the
+    paper's 'joint > sum of parts' synergy was NOT reproduced (see part3_output.txt).
+  - The confidence intervals of the starred methods overlap heavily.  We can say each beats
+    naive; we can NOT rank Budget RSI, Budget RSI + SO-RSI and Self-HPO against each other.
+    The simplest method (Budget RSI alone) scores at least as high as the more elaborate ones.
+
+WHAT WAS NOT TESTED / DOES NOT FOLLOW
+  - Bugs are synthetic single/double-operator mutations of 14 tiny functions, not real defects.
+  - The agent is a search over a fixed patch vocabulary, not an LLM; no natural-language reasoning.
+  - Only 5 held-out functions; one ('leap') is rarely solved by any method (<=7% in Part 1).
+  - The H-step 'analysis' is rule-based, not an LLM proposer; the harness space is 5 knobs.
+  - Setup costs are not in the per-bug budget: 960 runs (Budget RSI fit), memory warm-up,
+    and Self-HPO training on 79 bugs.
+  - Budget is fixed at 40 runs; conclusions may change at other budgets.
+  - Laptop adaptations preserve each paper's IDEA, not its scale or headline numbers.
+

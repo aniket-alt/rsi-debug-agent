@@ -1,0 +1,77 @@
+
+==============================================================================
+10.12  RSIFlow vs Self-HPO: which adaptation fits a debugging agent?
+==============================================================================
+                RSIFlow (2610.21791)              Self-HPO (2610.22791)
+ what adapts    workflow orchestration            harness AND policy, alternately
+ who proposes   an evolving meta-agent            the policy itself (H-step)
+ trigger        the current performance bottleneck failures of the current policy
+ fits us when   many pipeline stages to route     one agent loop + tunable test/CI harness
+
+Our agent is ONE loop (CI -> patch -> CI) with tunable harness knobs (how many tests,
+how many patches per round, diagnostics on/off).  That is Self-HPO's shape, so we use it.
+(RSIFlow's multi-stage router would need a multi-stage pipeline; lab 10.13 is skipped.)
+
+==============================================================================
+10.14  Self-HPO on the debugging agent
+==============================================================================
+start (default harness, untrained policy): held-out fixed 14.0%
+
+----- training seed 0 -----
+[JOINT cycle 1] failure diagnosis on train: exhausted 65%  overfit 3%  thrash/bug 1.26   hard bugs: 54/79
+      proposed harness [k=2 aug=0 loc=0 so_rsi=0 accept=ge dedupe=0]  hard-set fix rate 39%
+      proposed harness [k=1 aug=0 loc=1 so_rsi=0 accept=ge dedupe=0]  hard-set fix rate 31%
+      proposed harness [k=1 aug=0 loc=0 so_rsi=0 accept=ge dedupe=1]  hard-set fix rate 32%
+      proposed harness [k=1 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]  hard-set fix rate 60%
+      -> chosen harness [k=1 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+      -> P-step done (train fix rate while learning 63%) => HELD-OUT fixed 41.1%
+[JOINT cycle 2] failure diagnosis on train: exhausted 28%  overfit 5%  thrash/bug 0.00   hard bugs: 26/79
+      proposed harness [k=1 aug=3 loc=0 so_rsi=1 accept=gt dedupe=0]  hard-set fix rate 35%
+      proposed harness [k=1 aug=0 loc=0 so_rsi=0 accept=gt dedupe=0]  hard-set fix rate 11%
+      -> chosen harness [k=1 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+      -> P-step done (train fix rate while learning 66%) => HELD-OUT fixed 39.9%
+[JOINT cycle 3] failure diagnosis on train: exhausted 32%  overfit 5%  thrash/bug 0.00   hard bugs: 30/79
+      proposed harness [k=1 aug=3 loc=0 so_rsi=1 accept=gt dedupe=0]  hard-set fix rate 38%
+      proposed harness [k=2 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]  hard-set fix rate 53%
+      proposed harness [k=1 aug=0 loc=1 so_rsi=1 accept=gt dedupe=0]  hard-set fix rate 42%
+      -> chosen harness [k=2 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+      -> P-step done (train fix rate while learning 66%) => HELD-OUT fixed 43.4%
+[JOINT cycle 4] failure diagnosis on train: exhausted 24%  overfit 5%  thrash/bug 0.00   hard bugs: 23/79
+      proposed harness [k=2 aug=3 loc=0 so_rsi=1 accept=gt dedupe=0]  hard-set fix rate 26%
+      proposed harness [k=2 aug=0 loc=0 so_rsi=1 accept=ge dedupe=0]  hard-set fix rate 45%
+      -> chosen harness [k=2 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0]
+      -> P-step done (train fix rate while learning 68%) => HELD-OUT fixed 41.9%
+   seed 0: JOINT 41.9%  P-only 22.9%  H-only 37.6%  (final harness JOINT [k=2 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0])
+----- training seed 1 -----
+   seed 1: JOINT 34.1%  P-only 29.1%  H-only 37.6%  (final harness JOINT [k=3 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0])
+----- training seed 2 -----
+   seed 2: JOINT 38.4%  P-only 27.9%  H-only 37.6%  (final harness JOINT [k=1 aug=0 loc=0 so_rsi=1 accept=gt dedupe=0])
+
+==============================================================================
+RESULT - held-out bugs (unseen functions), mean over training seeds
+==============================================================================
+arm           fixed    sd across training seeds
+start         14.0%                            
+P-only        26.6%                        2.7
+H-only        37.6%                        0.0
+JOINT         38.1%                        3.2
+
+gain over start:  P-only +12.7 pts   H-only +23.6 pts   JOINT +24.2 pts
+sum of the two single-component gains: +36.3 pts
+JOINT minus that sum (the paper's 'synergy' test): -12.1 pts
+-> positive = joint gain exceeds the sum of parts (synergy); negative = it does not.
+
+Learned policy weights (JOINT, seed 0):
+   op=CONST_UP   -3.52
+   op=CONST_DN   +2.09
+   op=ARITH      +1.31
+   op=BOOL       -0.89
+   op=EQ         +0.79
+
+saved outputs/part3_selfhpo_curve.png
+saved outputs/part3_results.json (per-bug results, used by Part 4)
+
+CAVEATS: the H-step 'policy analysis' is rule-based, not an LLM; harness knobs are a
+small discrete space; the P-step also warms the SO-RSI inquiry memory (H-only has none);
+P-only was deployed in its trained (sampling) mode; the joint arm
+does twice the work per cycle (an H-step AND a P-step), so it is matched on cycles, not compute.

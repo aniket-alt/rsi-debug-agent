@@ -1,0 +1,137 @@
+
+==============================================================================
+10.06  Run SO-RSI: naive vs second-order, same budget (40 test runs/bug)
+==============================================================================
+Inquiry memory is warmed up on the TRAINING bugs only (3 passes), then FROZEN,
+so nothing about the held-out functions leaks into it.
+
+memory after warm-up: 5 symptom classes, 832 recorded observations
+
+NAIVE first-order                  fixed  14.2% (+/-5.1)  overfit 11.6%  cost/bug  34.8  thrash/bug 0.65  prevented/bug 0.00
+naive + dedupe (ablation)          fixed  13.5% (+/-5.9)  overfit 10.7%  cost/bug  34.7  thrash/bug 0.37  prevented/bug 0.00
+SO-RSI, empty memory               fixed  19.3% (+/-3.5)  overfit  8.8%  cost/bug  34.5  thrash/bug 0.00  prevented/bug 4.53
+SO-RSI, warmed memory              fixed  26.5% (+/-2.8)  overfit  9.1%  cost/bug  32.4  thrash/bug 0.00  prevented/bug 4.31
+
+How to read this:
+  * 'thrash/bug' = recurrences + opposing edits actually executed (wasted CI runs).
+  * 'prevented'  = proposals SO-RSI blocked before spending CI on them.
+  * 'naive + dedupe' isolates the cheap part (never retry); the gap to SO-RSI is the
+    diagnostic part (symptom probe + opposing-edit block + inquiry memory).
+
+==============================================================================
+10.07  The three anomaly types and the diagnostic probe
+==============================================================================
+Anomaly            detection rule (on the patch trace)                 response
+-----------------  --------------------------------------------------  ---------------------------
+recurrence         same (patch, program state) evaluated again          block; probe symptom
+opposing edits     proposed patch = inverse of last accepted patch      block; avoid oscillation
+expectation mismatch  a proposed patch makes CI worse                   counted + negative evidence
+(Every tried patch writes (symptom, operator, improved?) into the inquiry memory;
+ mismatches are the negative evidence that lowers an operator's score for that symptom.)
+
+The probe reads the CI failure and names a symptom class (cost: 2 test runs):
+  exc       any test raised an exception          -> suspect ['ARITH', 'CONST_DN', 'CONST_UP']
+  off1      every wrong output is off by exactly 1 -> suspect ['CMP', 'CONST_DN', 'CONST_UP']
+  signflip  every wrong output = -expected         -> suspect ['ARITH']
+  sparse    <=40% of tests fail                    -> suspect ['BOOL', 'CMP', 'EQ']
+  dense     most tests fail                        -> suspect ['ARITH', 'BOOL', 'EQ']
+These starting hypotheses are human-authored heuristics (the paper's 'lightweight probes').
+
+What did the inquiry memory LEARN?  P(operator fixes | symptom), top 3 per symptom:
+  symptom   operator    learned  trials   human hypothesis?
+  exc       CONST_DN       0.72       9   agrees
+  exc       CONST_UP       0.10       1   agrees
+  off1      EQ             0.66      13   DISAGREES
+  off1      CONST_DN       0.40     168   agrees
+  off1      CONST_UP       0.10      20   agrees
+  signflip  ARITH          0.71      33   agrees
+  signflip  EQ             0.03       7   DISAGREES
+  signflip  CONST_UP       0.02      11   DISAGREES
+  sparse    CONST_DN       0.43      30   DISAGREES
+  sparse    CMP            0.19      21   agrees
+  sparse    ARITH          0.10       1   DISAGREES
+  dense     EQ             0.46       6   agrees
+  dense     CONST_DN       0.19     116   DISAGREES
+  dense     ARITH          0.14     333   agrees
+
+  -> 2 pairs with >2 trials and learned rate >0.3 that the human table did NOT predict.
+     Inquiry memory lets observed evidence override the initial guess - but note the
+     small-sample risk: 'off1/EQ' = 0.66 rests on only 13 trials.
+
+Anomaly frequency in NAIVE traces on held-out bugs (10 seeds):
+  recurrence  0.23 per bug   (18% of bugs hit it)
+  opposing    0.42 per bug   (31% of bugs hit it)
+  mismatch    1.90 per bug   (66% of bugs hit it)
+
+==============================================================================
+10.08  Apply it: one real failing bug, replayed twice
+==============================================================================
+BUGGY CODE:
+def fizz(n):
+    if n % 15 == 0:
+        return 4
+    if n % 5 == 0:
+        return 2
+    if n % 3 == 0:
+        return 1
+    return 0
+
+CI REPORT:
+CI: 4/5 tests passed
+  FAIL fizz(15,): expected 3, got 4
+
+--- A) NAIVE first-order agent (seed 1) ---
+  r1 try CONST_UP@L3#2: CI 0.80->0.80
+  r1 ACCEPT CONST_UP@L3#2 (CI=0.80)
+  r2 !! OPPOSING EDIT: CONST_DN@L3#2 undoes the previously accepted CONST_UP@L3#2
+  r2 try CONST_DN@L3#2: CI 0.80->0.80
+  r2 ACCEPT CONST_DN@L3#2 (CI=0.80)
+  r3 !! EXPECTATION MISMATCH: CONST_DN@L4#8 was expected to help but CI fell 0.80->0.60
+  r3 try CONST_DN@L4#8: CI 0.80->0.60
+  r4 !! EXPECTATION MISMATCH: CONST_DN@L5#4 was expected to help but CI fell 0.80->0.40
+  r4 try CONST_DN@L5#4: CI 0.80->0.40
+  r5 try CONST_DN@L6#5: CI 0.80->0.80
+  r5 ACCEPT CONST_DN@L6#5 (CI=0.80)
+  r6 !! EXPECTATION MISMATCH: CONST_DN@L4#7 was expected to help but CI fell 0.80->0.60
+  r6 try CONST_DN@L4#7: CI 0.80->0.60
+  r7 !! EXPECTATION MISMATCH: CONST_UP@L5#4 was expected to help but CI fell 0.80->0.40
+  r7 try CONST_UP@L5#4: CI 0.80->0.40
+  => truly fixed: False   wasted: 0 recurrences, 1 opposing, 4 mismatches
+
+--- B) SO-RSI agent (same bug, same seed) ---
+  r1 PROBE symptom='off1' -> suspect ['CMP', 'CONST_DN', 'CONST_UP']; blocked 0 recurring + 0 opposing proposals
+  r1 !! EXPECTATION MISMATCH: EQ@L6#2 was expected to help but CI fell 0.80->0.40
+  r1 try EQ@L6#2: CI 0.80->0.40
+  r2 PROBE symptom='off1' -> suspect ['CMP', 'CONST_DN', 'CONST_UP']; blocked 1 recurring + 0 opposing proposals
+  r2 !! EXPECTATION MISMATCH: EQ@L2#0 was expected to help but CI fell 0.80->0.00
+  r2 try EQ@L2#0: CI 0.80->0.00
+  r3 PROBE symptom='off1' -> suspect ['CMP', 'CONST_DN', 'CONST_UP']; blocked 2 recurring + 0 opposing proposals
+  r3 !! EXPECTATION MISMATCH: EQ@L4#1 was expected to help but CI fell 0.80->0.00
+  r3 try EQ@L4#1: CI 0.80->0.00
+  r4 PROBE symptom='off1' -> suspect ['CMP', 'CONST_DN', 'CONST_UP']; blocked 3 recurring + 0 opposing proposals
+  r4 try CONST_DN@L3#2: CI 0.80->1.00
+  r4 ACCEPT CONST_DN@L3#2 (CI=1.00)
+  => truly fixed: True   cost: 33/40
+
+FIXED SOURCE (SO-RSI):
+def fizz(n):
+    if n % 15 == 0:
+        return 3
+    if n % 5 == 0:
+        return 2
+    if n % 3 == 0:
+        return 1
+    return 0
+
+Retrospective analysis (what the course asks in lab 10.08):
+  * Did the naive agent repeat a patch?        recurrences = 0
+  * Did it undo a previous change?             opposing    = 1
+  * Did an outcome surprise it?                mismatches  = 4
+  * What SO-RSI did differently: it probed the symptom, blocked every repeat, and never
+    ran the oscillating CONST_UP/CONST_DN pair.  It did NOT get the ranking right
+    at first: the memory's learned bonus for EQ (from few trials, see 10.07) outranked
+    the probe's CMP/CONST suspects, so rounds 1-3 were wasted on EQ patches.  The
+    blocking logic kept it from repeating them, and round 4 found the fix.
+
+NOTE: this is one hand-picked illustrative bug (selected because it shows the
+mechanism, including a weakness).  The honest numbers are the 10-seed table in 10.06.

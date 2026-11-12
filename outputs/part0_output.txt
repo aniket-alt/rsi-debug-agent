@@ -1,0 +1,85 @@
+
+==============================================================================
+0.1  A correct program, and a bug injected into it
+==============================================================================
+CORRECT SOURCE:
+def abs_diff_sum(xs):
+    t = 0
+    for i in range(len(xs) - 1):
+        d = xs[i] - xs[i + 1]
+        if d < 0:
+            d = -d
+        t += d
+    return t
+
+BUGGY SOURCE (what lands in the pipeline):
+def abs_diff_sum(xs):
+    t = 0
+    for i in range(len(xs) + 1):
+        d = xs[i] - xs[i + 1]
+        if d < 0:
+            d = -d
+        t += d
+    return t
+
+(ground truth, hidden from the agent) injected fault(s): ['ARITH@L3#1']
+
+==============================================================================
+0.2  What the CI pipeline reports
+==============================================================================
+CI: 0/5 tests passed
+  FAIL abs_diff_sum([5, 0],): expected 5, got IndexError: list index out of range
+  FAIL abs_diff_sum([1, -1, -4],): expected 5, got IndexError: list index out of range
+  FAIL abs_diff_sum([-3, 3],): expected 6, got IndexError: list index out of range
+  ... and 2 more failures
+
+The agent sees ONLY this report + the buggy code.  It is scored on
+80 HIDDEN tests it never sees (so over-fitting the visible tests is punished).
+
+==============================================================================
+0.3  The agent's patch vocabulary
+==============================================================================
+A patch = (operator, site).  Operators: CMP  ARITH  EQ  BOOL  CONST_UP  CONST_DN
+This program has 13 candidate patches:
+  CMP@L5#0, ARITH@L7#0, ARITH@L3#1, ARITH@L4#2, ARITH@L4#3, CONST_UP@L2#0, CONST_UP@L3#1, CONST_UP@L5#2, CONST_UP@L4#3, CONST_DN@L2#0, CONST_DN@L3#1, CONST_DN@L5#2, CONST_DN@L4#3
+Budget: 40 test executions per bug (each CI run of the visible suite costs 5).
+
+==============================================================================
+0.4  Benchmark
+==============================================================================
+training bugs (9 functions): 79   held-out bugs (5 NEW functions): 43
+single-fault bugs: 70   double-fault bugs: 52
+The agent is trained/tuned on the training functions and judged on the held-out ones.
+
+==============================================================================
+0.5  The NAIVE first-order agent, on one bug (trace)
+==============================================================================
+  r1 try CONST_DN@L2#0: CI 0.00->0.00
+  r1 ACCEPT CONST_DN@L2#0 (CI=0.00)
+  r2 try CONST_UP@L3#1: CI 0.00->0.00
+  r2 ACCEPT CONST_UP@L3#1 (CI=0.00)
+  r3 try CONST_DN@L5#2: CI 0.00->0.00
+  r3 ACCEPT CONST_DN@L5#2 (CI=0.00)
+  r4 try ARITH@L4#3: CI 0.00->0.00
+  r4 ACCEPT ARITH@L4#3 (CI=0.00)
+  r5 try CONST_DN@L5#2: CI 0.00->0.00
+  r5 ACCEPT CONST_DN@L5#2 (CI=0.00)
+  r6 try CMP@L5#0: CI 0.00->0.00
+  r6 ACCEPT CMP@L5#0 (CI=0.00)
+  r7 try CONST_DN@L2#0: CI 0.00->0.00
+  r7 ACCEPT CONST_DN@L2#0 (CI=0.00)
+  -> CI green: False   hidden tests pass (truly fixed): False   cost: 40
+  -> recurrences 0, opposing edits 0, mismatches 0
+
+==============================================================================
+0.6  Baseline on all HELD-OUT bugs (10 seeds)
+==============================================================================
+The naive agent tries a random patch, keeps it if CI does not get worse, no memory.
+naive k=1 accept=ge                fixed  14.2% (+/-5.1)  overfit 11.6%  cost/bug  34.8  thrash/bug 0.65  prevented/bug 0.00
+naive k=1 accept=gt                fixed  27.9% (+/-4.4)  overfit 10.2%  cost/bug  32.6  thrash/bug 0.90  prevented/bug 0.00
+naive k=2 accept=ge                fixed  18.8% (+/-5.1)  overfit  8.8%  cost/bug  30.7  thrash/bug 0.36  prevented/bug 0.00
+naive k=2 accept=gt                fixed  27.9% (+/-6.4)  overfit  8.8%  cost/bug  30.3  thrash/bug 0.60  prevented/bug 0.00
+naive k=3 accept=ge                fixed  24.4% (+/-4.3)  overfit 10.5%  cost/bug  30.8  thrash/bug 0.17  prevented/bug 0.00
+naive k=3 accept=gt                fixed  29.3% (+/-4.2)  overfit 10.5%  cost/bug  30.8  thrash/bug 0.33  prevented/bug 0.00
+
+This is the number every RSI method below has to beat, at the SAME budget.

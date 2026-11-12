@@ -1,0 +1,109 @@
+
+==============================================================================
+10.03  Run the Budget RSI scorer
+==============================================================================
+Step 1. Collect 96 labelled patches on TRAINING bugs.
+        label = how much the patch raises the visible-CI pass rate.
+        96 patches  -> 25 improved CI, 15 made it worse, 56 changed nothing
+        one-time labelling cost: 960 test executions
+
+Step 2. Fit the linear readout   score = w . [parent_rate + 8 patch features]
+        done (ridge regression, pure NumPy)
+
+Step 3. Same agent loop, same budget (40 test runs/bug), only the SELECTOR differs.
+        All use: accept only strict CI improvement, never re-run a tried patch.
+
+random          k=1                fixed  31.4% (+/-5.4)  overfit 11.9%  cost/bug  31.7  thrash/bug 0.08  prevented/bug 0.00
+parent-rate     k=1                fixed  32.8% (+/-5.3)  overfit 11.6%  cost/bug  31.9  thrash/bug 0.10  prevented/bug 0.00
+BUDGET RSI      k=1                fixed  44.0% (+/-1.6)  overfit 10.5%  cost/bug  29.5  thrash/bug 0.12  prevented/bug 0.00
+
+random          k=2                fixed  30.2% (+/-7.3)  overfit  9.5%  cost/bug  29.7  thrash/bug 0.05  prevented/bug 0.00
+parent-rate     k=2                fixed  28.4% (+/-5.4)  overfit 11.9%  cost/bug  30.2  thrash/bug 0.07  prevented/bug 0.00
+BUDGET RSI      k=2                fixed  38.4% (+/-1.2)  overfit 10.5%  cost/bug  28.6  thrash/bug 0.12  prevented/bug 0.00
+
+random          k=3                fixed  30.9% (+/-3.9)  overfit 11.6%  cost/bug  30.8  thrash/bug 0.03  prevented/bug 0.00
+parent-rate     k=3                fixed  31.6% (+/-3.9)  overfit 11.9%  cost/bug  30.9  thrash/bug 0.02  prevented/bug 0.00
+BUDGET RSI      k=3                fixed  37.4% (+/-0.7)  overfit 11.4%  cost/bug  30.0  thrash/bug 0.07  prevented/bug 0.00
+
+Cost view: full evaluation would run CI on EVERY candidate patch each round.
+   candidates per bug: 15.6   vs  Budget RSI evaluates k=1..3 per round
+   k=1: patches executed per round cut by 94%
+   k=2: patches executed per round cut by 87%
+   k=3: patches executed per round cut by 81%
+   but the scorer is not free: 960 executions to label, amortised over the 43 held-out bugs = 22 executions/bug
+
+==============================================================================
+10.04  Analyse the scoring mechanism
+==============================================================================
+Learned coefficients (largest magnitude first):
+   op=CMP         +0.811
+   op=BOOL        +0.775
+   op=ARITH       +0.667
+   parent_rate    -0.662
+   op=CONST_DN    +0.628
+   op=EQ          +0.625
+   rel_line       -0.561
+   op=CONST_UP    +0.501
+   ochiai         -0.029
+
+Reading: operator type carries the signal; 'ochiai' (fault localisation) is ~0.
+That is a finding, not a bug: with only 25 improving patches in 96, a LINEAR model
+on one-hot operators learns 'which patch KINDS tend to help', not 'where the fault is'.
+
+Ablation A - drop features (held-out fix rate, k=1, 10 independent fit seeds):
+   all 9 features             fixed  41.9%  (+/-5.5 across fits)
+   no ochiai/rel_line (7)     fixed  34.4%  (+/-4.7 across fits)
+   ops only, no parent (6)    fixed  35.3%  (+/-5.4 across fits)
+   parent_rate only (1)       fixed  31.0%  (+/-0.0 across fits)
+
+Ablation B - number of labelled patches (k=1, 10 fit seeds each):
+    12 labelled patches   fixed  35.1%  (+/-7.6)
+    24 labelled patches   fixed  38.1%  (+/-9.5)
+    48 labelled patches   fixed  40.5%  (+/-7.2)
+    96 labelled patches   fixed  43.2%  (+/-5.0)
+   192 labelled patches   fixed  42.9%  (+/-3.7)
+
+==============================================================================
+10.05  Extend: does the scorer rank a VALID fix highly on unseen bugs?
+==============================================================================
+For every single-fault held-out bug: score all candidate patches (zero CI runs) and find
+where the FIRST patch that really fixes the bug (passes the hidden tests) lands.
+(Several patches can be valid fixes, so we do not require the exact injected inverse.)
+
+single-fault held-out bugs: 27
+valid fix ranked #1 : 5/27 = 19%
+valid fix in top-3  : 9/27 = 33%
+mean rank of first valid fix: 7.19   (random order expectation 7.94)
+-> the one-shot ranking edge is small; the end-to-end gain comes from it compounding over rounds.
+
+Where does the end-to-end gain come from? Fix rate by held-out function (k=1, 10 seeds):
+   function        random  readout
+   abs_diff_sum       40%      70%
+   fizz               15%      24%
+   gcd                70%     100%
+   inversions         52%      60%
+   leap                7%       5%
+   (the scorer helps on some functions and does nothing - or slightly hurts - on 'leap')
+
+Worked example (one held-out bug): predicted score vs actual CI gain
+def inversions(xs):
+    c = 0
+    for i in range(len(xs)):
+        for j in range(i + 1, len(xs)):
+            if xs[i] >= xs[j]:
+                c += 1
+    return c
+   patch              score  actual CI gain   note
+   CONST_DN@L2#0      0.052           -0.20   
+   CMP@L5#0          -0.007           +0.40   <- valid fix
+   ARITH@L4#0        -0.071           -0.40   
+   CONST_UP@L2#0     -0.074           -0.60   
+   CONST_DN@L4#1     -0.110           -0.40   
+   ARITH@L6#1        -0.234           -0.20   
+   CONST_UP@L4#1     -0.237           +0.20   
+   CONST_DN@L6#2     -0.273           -0.20   
+   CONST_UP@L6#2     -0.400           -0.20   
+
+HONEST LIMITS: operator priors transfer across functions, localisation does not help
+in a linear readout, and the 96-patch fit is a real cost.  The gain over random is
+modest and uneven; it is not the paper's headline number (different task and scale).
