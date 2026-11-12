@@ -12,9 +12,18 @@ patches the code and re-runs the tests - and three October-2026 RSI methods that
 | 4 | Theme 09 / 11 | fair comparison + claim | `part4_final_comparison.py` | `outputs/part4_output.txt` |
 
 Methods and lab content come from `COURSE-MAP.md` (Theme 10) of
-`dlmastery/simple-coding-harness`. The names *dream-rsi / AIDE2 / Scientist2* from the assignment
-text do not appear in that course repo, so I used three methods the repo covers.
-**Confirm with the instructor that this is acceptable.**
+`dlmastery/simple-coding-harness`. The assignment asks for three recent RSI methods and names
+dream-rsi, AIDE2 and Scientist2 only as examples, so I chose three October 2026 papers covered by
+the course's Theme 10: Budget RSI, SO-RSI and Self-HPO.
+
+## Videos (one per part)
+| Part | Video |
+|---|---|
+| 0 - Pipeline + naive baseline | [YouTube link - coming soon](https://youtube.com/PLACEHOLDER-part0) |
+| 1 - Budget RSI (labs 10.03-10.05) | [YouTube link - coming soon](https://youtube.com/PLACEHOLDER-part1) |
+| 2 - SO-RSI (labs 10.06-10.08) | [YouTube link - coming soon](https://youtube.com/PLACEHOLDER-part2) |
+| 3 - Self-HPO (labs 10.12, 10.14) | [YouTube link - coming soon](https://youtube.com/PLACEHOLDER-part3) |
+| 4 - Comparison + claim | [YouTube link - coming soon](https://youtube.com/PLACEHOLDER-part4) |
 
 ## Run it
 ```bash
@@ -75,7 +84,7 @@ rsi_debug/self_hpo.py   Self-HPO: REINFORCE P-step, failure-driven H-step
 rsi_debug/evaluate.py   seeds, summaries, per-bug vectors
 ```
 
-## Video outline (one video per part - you record these)
+## Video outline (what each video covers)
 Each video: (1) state the paper's idea in one sentence, (2) open the code and walk the 2-3 key
 functions, (3) run the script on screen, (4) read the output and state one limitation.
 
