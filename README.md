@@ -20,10 +20,10 @@ the course's Theme 10: Budget RSI, SO-RSI and Self-HPO.
 | Part | Video |
 |---|---|
 | 0 - Pipeline + naive baseline | [Video](https://drive.google.com/file/d/1CWfhzbvXl3efXFgmMLl_vxkuLM4Qbmgr/view?usp=sharing) |
-| 1 - Budget RSI (labs 10.03-10.05) | [Video](https://youtube.com/PLACEHOLDER-part1) |
-| 2 - SO-RSI (labs 10.06-10.08) | [Video](https://youtube.com/PLACEHOLDER-part2) |
-| 3 - Self-HPO (labs 10.12, 10.14) | [Video](https://youtube.com/PLACEHOLDER-part3) |
-| 4 - Comparison + claim | [Video](https://youtube.com/PLACEHOLDER-part4) |
+| 1 - Budget RSI (labs 10.03-10.05) | [Video](https://drive.google.com/file/d/1U9-UGxCbyocZagFbu5bD5LCl_xOq_JOg/view?usp=sharing) |
+| 2 - SO-RSI (labs 10.06-10.08) | [Video](https://drive.google.com/file/d/1DmhCHBcaau60Mnk6htwzW_qw-7fRs8KA/view?usp=sharing) |
+| 3 - Self-HPO (labs 10.12, 10.14) | [Video](https://drive.google.com/file/d/10yg5mRm5jqlJatjv9KBAehJXpLF8W_nI/view?usp=sharing) |
+| 4 - Comparison + claim | [Video](https://drive.google.com/file/d/1uLN95YLx5GsVTGqqr5HyBso7xaP5jPWF/view?usp=sharing) |
 
 ## Run it
 ```bash
